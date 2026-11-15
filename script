@@ -1,0 +1,137 @@
+-- anyone wants to change these values or set them to custom use this guide thingy
+repeat task.wait() until getgenv().JHK and getgenv().JHK.Addons
+local j = getgenv().JHK --jewhakAAAAK repo
+local p = game:GetService("Players") -- players as always
+local u = game:GetService("UserInputService") -- read it says userinput
+local r = game:GetService("RunService") --runservice thing
+local lp = p.LocalPlayer -- local player
+local s = j:AddSection("freecam", "left") --section from jewhack
+local c = require(lp.PlayerScripts:WaitForChild("PlayerModule")):GetControls() --checks localplayer for the playermodule before loading; kinda forces it but ignore that
+local cam = workspace.CurrentCamera -- literally camera
+local on, speed, fast, sens = false, 50, 150, 0.0025 --messes with sensitivity settings
+local pos, yaw, pitch, subject -- pos is position
+local loop
+local look = false -- this changes a few things idk why i have it here but be careful changing this
+local keys = {W=false,A=false,S=false,D=false,Space=false,LeftControl=false,LeftShift=false} -- sets movement to decline itself if freecam is entered so your body doesnt move you into death
+local function notify(msg) -- thing to say it loaded
+    j:Notify("freecam", msg, 4, "small", "bell") --again they asked me to add it
+end
+local function clear()
+    for k in pairs(keys) do keys[k] = false end
+end
+local function angles(cf)
+    local v = cf.LookVector
+    yaw = math.atan2(-v.X, -v.Z) -- i might be able to do this differently in the future
+    pitch = math.asin(math.clamp(v.Y, -1, 1))
+end
+local function stop()
+    if not on then return end
+    on = false
+    if loop then loop:Disconnect() loop = nil end
+    cam = workspace.CurrentCamera
+    local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+    if cam then
+        cam.CameraType = Enum.CameraType.Custom
+        cam.CameraSubject = hum or subject
+    end
+    u.MouseBehavior = Enum.MouseBehavior.Default
+    u.MouseIconEnabled = true
+    look = false
+    clear()
+    c:Enable()
+    notify("freecam disabled")
+end
+local function start()
+    if on then return end
+    cam = workspace.CurrentCamera
+    if not cam then return notify("camera unavailable") end
+    subject = cam.CameraSubject
+    pos = cam.CFrame.Position
+    angles(cam.CFrame)
+    on = true
+    c:Disable()
+    cam.CameraType = Enum.CameraType.Scriptable
+    u.MouseBehavior = Enum.MouseBehavior.Default
+    u.MouseIconEnabled = true
+    loop = r.RenderStepped:Connect(function(dt)
+        if not on then return end
+        cam = workspace.CurrentCamera
+        if not cam then return end
+        local move = Vector3.zero
+        if keys.W then move += Vector3.new(0,0,-1) end
+        if keys.S then move += Vector3.new(0,0,1) end
+        if keys.A then move += Vector3.new(-1,0,0) end
+        if keys.D then move += Vector3.new(1,0,0) end
+        if keys.Space then move += Vector3.new(0,1,0) end
+        if keys.LeftControl then move += Vector3.new(0,-1,0) end
+        local rot = CFrame.fromOrientation(pitch, yaw, 0)
+        if move.Magnitude > 0 then
+            pos += rot:VectorToWorldSpace(move.Unit) * (keys.LeftShift and fast or speed) * dt
+        end
+        cam.CFrame = CFrame.new(pos) * rot
+    end)
+    notify("freecam turned on") --for some reason in-game this doesnt notify the player but ill keep this here if it randomly does
+end
+local function toggle(v) -- boolean value jewhack gave
+    if v then start() else stop() end
+end
+u.InputBegan:Connect(function(i) -- explains itself
+    if not on then return end
+    if i.UserInputType == Enum.UserInputType.MouseButton2 then
+        look = true
+        u.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+        u.MouseIconEnabled = false
+        return
+    end
+    local k = i.KeyCode.Name
+    if keys[k] ~= nil then keys[k] = true end
+end)
+u.InputEnded:Connect(function(i) -- explains itself once more
+    if i.UserInputType == Enum.UserInputType.MouseButton2 then
+        look = false
+        if on then
+            u.MouseBehavior = Enum.MouseBehavior.Default
+            u.MouseIconEnabled = true
+        end
+    end
+    local k = i.KeyCode.Name
+    if keys[k] ~= nil then keys[k] = false end
+end)
+u.InputChanged:Connect(function(i)
+    if not on or not look or i.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+    yaw -= i.Delta.X * sens
+    pitch = math.clamp(pitch - i.Delta.Y * sens, -math.pi/2, math.pi/2)
+end)
+s:AddLabel("WASD to move") -- you can also use space and ctrl to control up and down but camera controls where it goes so i didnt add that
+s:AddLabel("hold shift to speed up") -- mind you if the value is set too high itll crash the game
+s:AddSlider({
+    Text = "speed",
+    Default = 50,
+    Min = 5,
+    Max = 200,
+    Rounding = 0,
+    Flag = "freecam_speed",
+    Callback = function(v) speed = v end
+})
+s:AddSlider({ -- kinda cool yall had this, i only used toggles before but i looked at documentation and saw yall had this
+    Text = "fast speed",
+    Default = 150,
+    Min = 25,
+    Max = 400,
+    Rounding = 0,
+    Flag = "freecam_fast",
+    Callback = function(v) fast = v end
+})
+s:AddToggle({
+    Text = "freecam",
+    Default = false,
+    Flag = "freecam_toggle",
+    Callback = toggle
+}):AddKeybind({
+    Default = "F",
+    Text = "freecam",
+    SyncToggleState = true,
+    Mode = "Toggle",
+    Flag = "freecam_key"
+})
+notify("IT LOADED AAAAAAAAAAAAA") -- remove this if you want, i wanted to add character since i got bored while vibing to music
