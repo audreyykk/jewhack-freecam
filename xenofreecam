@@ -1,0 +1,177 @@
+-- THIS ONE IS THE XENO VERSION, IT CAN BE MORE EASY TO DETECT SINCE IT FREEZES ROOTPART
+-- basically just a freecam but without using require or the playermodule since i dont think xeno can use playermodule, i might be wrong but id rather be safe
+-- instead of disabling controls it anchors the humanoidrootpart so your character stays in place and you dont wander off, just please dont have someone bring you since it might be a bit weird
+-- RESORT TO THE OTHER ONE FOR MAIN USE SINCE IT ONLY DISABLES MOVEMENT CONTROLS
+-- all locals will stay the same so chill
+repeat task.wait() until getgenv().JHK and getgenv().JHK.Addons
+local j = getgenv().JHK -- jewhakAAAAK repo
+local p = game:GetService("Players") -- players as always
+local u = game:GetService("UserInputService") -- read it says userinput
+local r = game:GetService("RunService") -- runservice thing
+local lp = p.LocalPlayer -- local player
+local s = j:AddSection("freecam", "left") -- section from jewhack
+local cam = workspace.CurrentCamera -- literally camera
+local on, speed, fast, sens = false, 50, 150, 0.0025
+local pos, yaw, pitch, subject
+local loop
+local look = false
+local root, oldAnchored
+local hum, oldWalk, oldJump, oldJumpHeight, oldRotate
+local keys = {W=false,A=false,S=false,D=false,Space=false,LeftControl=false,LeftShift=false}
+local function notify(msg)
+    j:Notify("freecam", msg, 4, "small", "bell")
+end
+local function clear()
+    for k in pairs(keys) do keys[k] = false end
+end
+local function angles(cf)
+    local v = cf.LookVector
+    yaw = math.atan2(-v.X, -v.Z)
+    pitch = math.asin(math.clamp(v.Y, -1, 1))
+end
+local function freeze()
+    local char = lp.Character
+    hum = char and char:FindFirstChildOfClass("Humanoid")
+    root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        oldAnchored = root.Anchored
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        root.Anchored = true
+    end
+    if hum then
+        oldWalk = hum.WalkSpeed
+        oldJump = hum.JumpPower
+        oldJumpHeight = hum.JumpHeight
+        oldRotate = hum.AutoRotate
+        hum.WalkSpeed = 0
+        hum.JumpPower = 0
+        hum.JumpHeight = 0
+        hum.AutoRotate = false
+    end
+end
+local function unfreeze()
+    if root and root.Parent then
+        root.Anchored = oldAnchored or false
+    end
+    if hum and hum.Parent then
+        hum.WalkSpeed = oldWalk or 16
+        hum.JumpPower = oldJump or 50
+        hum.JumpHeight = oldJumpHeight or 7.2
+        hum.AutoRotate = oldRotate ~= nil and oldRotate or true
+    end
+    root = nil
+    hum = nil
+end
+local function stop()
+    if not on then return end
+    on = false
+    if loop then loop:Disconnect() loop = nil end
+    cam = workspace.CurrentCamera
+    local character = lp.Character
+    local currentHum = character and character:FindFirstChildOfClass("Humanoid")
+    if cam then
+        cam.CameraType = Enum.CameraType.Custom
+        cam.CameraSubject = currentHum or subject
+    end
+    u.MouseBehavior = Enum.MouseBehavior.Default
+    u.MouseIconEnabled = true
+    look = false
+    clear()
+    unfreeze()
+    notify("freecam disabled")
+end
+local function start()
+    if on then return end
+    cam = workspace.CurrentCamera
+    if not cam then return notify("camera unavailable") end
+    subject = cam.CameraSubject
+    pos = cam.CFrame.Position
+    angles(cam.CFrame)
+    on = true
+    freeze()
+    cam.CameraType = Enum.CameraType.Scriptable
+    u.MouseBehavior = Enum.MouseBehavior.Default
+    u.MouseIconEnabled = true
+    loop = r.RenderStepped:Connect(function(dt)
+        if not on then return end
+        cam = workspace.CurrentCamera
+        if not cam then return end
+        local move = Vector3.zero
+        if keys.W then move += Vector3.new(0,0,-1) end
+        if keys.S then move += Vector3.new(0,0,1) end
+        if keys.A then move += Vector3.new(-1,0,0) end
+        if keys.D then move += Vector3.new(1,0,0) end
+        if keys.Space then move += Vector3.new(0,1,0) end
+        if keys.LeftControl then move += Vector3.new(0,-1,0) end
+        local rot = CFrame.fromOrientation(pitch, yaw, 0)
+        if move.Magnitude > 0 then
+            pos += rot:VectorToWorldSpace(move.Unit) * (keys.LeftShift and fast or speed) * dt
+        end
+        cam.CFrame = CFrame.new(pos) * rot
+    end)
+    notify("freecam turned on")
+end
+local function toggle(v)
+    if v then start() else stop() end
+end
+u.InputBegan:Connect(function(i)
+    if not on then return end
+    if i.UserInputType == Enum.UserInputType.MouseButton2 then
+        look = true
+        u.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+        u.MouseIconEnabled = false
+        return
+    end
+    local k = i.KeyCode.Name
+    if keys[k] ~= nil then keys[k] = true end
+end)
+u.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton2 then
+        look = false
+        if on then
+            u.MouseBehavior = Enum.MouseBehavior.Default
+            u.MouseIconEnabled = true
+        end
+    end
+    local k = i.KeyCode.Name
+    if keys[k] ~= nil then keys[k] = false end
+end)
+u.InputChanged:Connect(function(i)
+    if not on or not look or i.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+    yaw -= i.Delta.X * sens
+    pitch = math.clamp(pitch - i.Delta.Y * sens, -math.pi/2, math.pi/2)
+end)
+s:AddLabel("WASD to move")
+s:AddLabel("hold shift to speed up")
+s:AddSlider({
+    Text = "speed",
+    Default = 50,
+    Min = 5,
+    Max = 200,
+    Rounding = 0,
+    Flag = "freecam_speed",
+    Callback = function(v) speed = v end
+})
+s:AddSlider({
+    Text = "fast speed",
+    Default = 150,
+    Min = 25,
+    Max = 400,
+    Rounding = 0,
+    Flag = "freecam_fast",
+    Callback = function(v) fast = v end
+})
+s:AddToggle({
+    Text = "freecam",
+    Default = false,
+    Flag = "freecam_toggle",
+    Callback = toggle
+}):AddKeybind({
+    Default = "F",
+    Text = "freecam",
+    SyncToggleState = true,
+    Mode = "Toggle",
+    Flag = "freecam_key"
+})
+notify("IT LOADED AAAAAAAAAAAAA")
